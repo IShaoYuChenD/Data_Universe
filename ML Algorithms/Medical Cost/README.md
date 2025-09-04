@@ -12,7 +12,7 @@ Data Preprocessing:
 
 Initial data exploration to check for missing values and understand descriptive statistics.
 
-Categorical features, such as smoker, sex, and region, are converted into a numerical format using one-hot encoding with pd.get_dummies(). This is done to prepare the data for the linear regression model.
+Categorical features, such as smoker, sex, and region, are converted into a numerical format using one-hot encoding with pd.get\_dummies(). This is done to prepare the data for the linear regression model.
 
 Model Building:
 
@@ -26,9 +26,7 @@ The model's performance is assessed using two key metrics:
 
 Mean Squared Error (MSE): Measures the average squared difference between the actual and predicted values.
 
-R-squared (R 
-2
- ) Score: Represents the proportion of the variance in the dependent variable that is predictable from the independent variables.
+R-squared (R2) Score: Represents the proportion of the variance in the dependent variable that is predictable from the independent variables.
 
 A scatter plot of actual vs. predicted charges is generated to provide a visual representation of the model's accuracy, with a red dashed line indicating the ideal "perfect prediction" line.
 
@@ -43,3 +41,4 @@ Scikit-learn
 Matplotlib
 
 Seaborn
+

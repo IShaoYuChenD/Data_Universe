@@ -26,13 +26,7 @@ Historical stock data for a specified ticker (AAPL) is downloaded using the yfin
 
 
 
-The current stock price (S 
-
-0
-
-​
-
-&nbsp;) is set as the most recent closing price.
+The current stock price (S0) is set as the most recent closing price.
 
 
 
@@ -48,13 +42,7 @@ The core of the project is the implementation of the Black-Scholes formula, whic
 
 
 
-Underlying stock price (S 
-
-0
-
-​
-
-&nbsp;)
+Underlying stock price (S0)
 
 
 

@@ -3,7 +3,6 @@ import os
 
 def load_prices(ticker, data_path="../data/raw"):
     """Load CSV and fix columns to standard OHLCV format."""
-    import pandas as pd, os
 
     df = pd.read_csv(
         os.path.join(data_path, f"{ticker}.csv"),

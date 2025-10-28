@@ -18,7 +18,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
     Compute great-circle distance (km). All inputs may be scalars or numpy arrays (broadcastable).
     """
     R_earth = 6371.0
-    lat1r = np.radians(lat1)
+    lat1r = np.radians(lat1) # convert degrees to radians
     lon1r = np.radians(lon1)
     lat2r = np.radians(lat2)
     lon2r = np.radians(lon2)
@@ -34,15 +34,17 @@ def haversine_km(lat1, lon1, lat2, lon2):
 def sample_magnitudes(n, b=1.0, m_min=4.5, m_max=8.5, rng=None):
     if rng is None:
         rng = np.random.default_rng()
-    beta = b * np.log(10)
-    u = rng.random(n)
-    c = np.exp(-beta * m_min) - np.exp(-beta * m_max)
+    beta = b * np.log(10) # change of base--> N = (const)exp(-\beta M)
+    u = rng.random(n) # generates $n$ random numbers that are uniformly distributed between 0 and 1
+    # let u = F(M) (the truncatedCDF), then do inverse transform to get M
+    c = np.exp(-beta * m_min) - np.exp(-beta * m_max) # (re)normalization factor for the CDF, proportional to the number of events in this magnitude window
     mags = -np.log(np.exp(-beta * m_min) - u * c) / beta
     return mags
 # The Gutenberg-Richter law is a fundamental relationship in seismology that describes the relationship between the magnitude and total number of earthquakes in any given region and time period.
 # n: The number of magnitudes (earthquakes) to simulate.
 # b: A key parameter in the law that controls the slope of the distribution. A higher $b$ means more small earthquakes and fewer large ones.
 # m_min, m_max: The minimum and maximum magnitudes to consider.
+# the function efficiently produces an array of magnitudes that statistically conform to the specified Gutenberg-Richter law parameters
 # -------------------------
 # Simple attenuation (illustrative) -> PGA in g
 # PGA = 10^(a0 + a1*M) / (R + c)^gamma
@@ -50,15 +52,19 @@ def sample_magnitudes(n, b=1.0, m_min=4.5, m_max=8.5, rng=None):
 def pga_from_mag_dist(M, R_km, a0=-3.0, a1=0.5, c=10.0, gamma=1.3):
     M = np.asarray(M)
     R = np.asarray(R_km)
-    numer = 10 ** (a0 + a1 * M)
+    numer = 10 ** (a0 + a1 * M) # represents the energy or intensity of shaking generated at the source
     denom = (R + c) ** gamma
     return numer / denom
 # this estimates the Peak Ground Acceleration (PGA)—a measure of ground shaking intensity—based on the earthquake's magnitude and the distance from the earthquake source.
+# a0 adjusts the overall ground motion level. It controls the baseline acceleration.
+# a1 controls how rapidly ground motion increases with magnitude.
+# c handles distance effects, often called the "fictitious depth" or "closeness factor." It prevents the denominator from going to zero when the distance $R$ is zero, and accounts for the fact that a rupture is not a single point
+# gamma controls how quickly ground motion decreases with distance
 # -------------------------
 # Catalog generator (epicenters uniform in bbox)
 # -------------------------
 def generate_earthquake_events(n_events: int = 100,
-                               region_bounds: Optional[Dict] = None,
+                               region_bounds: Optional[Dict] = None, # Using Optional[Dict] means the input can be a dictionary or None
                                magnitude_range: Tuple[float,float] = (4.5, 7.5),
                                b: float = 1.0,
                                depth_km: float = 10.0,
@@ -71,13 +77,16 @@ def generate_earthquake_events(n_events: int = 100,
     rng = np.random.default_rng(seed)
     if region_bounds is None:
         # default bbox near Central Europe — change as needed
-        region_bounds = {'lon_min': 5.0, 'lon_max': 15.0, 'lat_min': 45.0, 'lat_max': 55.0}
+        region_bounds = {'lon_min': 5.0, 'lon_max': 15.0, 'lat_min': 45.0, 'lat_max': 55.0} # we don't use this here
 
     lons = rng.uniform(region_bounds['lon_min'], region_bounds['lon_max'], n_events)
     lats = rng.uniform(region_bounds['lat_min'], region_bounds['lat_max'], n_events)
-    # sample magnitudes via truncated Gutenberg-Richter for realism
+    # sample magnitudes via truncated Gutenberg-Richter for realism (fewer large events, more small events)
     mags = sample_magnitudes(n_events, b=b, m_min=magnitude_range[0], m_max=magnitude_range[1], rng=rng)
     depths = rng.normal(loc=depth_km, scale=5.0, size=n_events).clip(1.0, 100.0)
+    # generates depths that follow a Normal (Gaussian) distribution centered around the mean depth (loc=depth_km) with a spread (scale=5.0)
+    # the clip ensures that any randomly generated depth that is less than 1.0 km or greater than 100.0 km is forced to 1.0 or 100.0
+    # the features—longitude, latitude, magnitude, and depth—are indeed randomly and independently generated and are paired together only by the event's index
 
     df = pd.DataFrame({
         'event_id': np.arange(1, n_events+1, dtype=int),
@@ -95,28 +104,28 @@ def generate_earthquake_events(n_events: int = 100,
 def compute_intensity_for_catalog(catalog_df: pd.DataFrame,
                                   exposures_df: pd.DataFrame,
                                   attenuation_fn=pga_from_mag_dist,
-                                  exposure_id_col: str = 'id',
+                                  exposure_id_col: str = 'id', # if not specified, use 'id' as the input
                                   exposure_lat_col: str = 'lat',
                                   exposure_lon_col: str = 'lon',
                                   drop_zeros: bool = True) -> pd.DataFrame:
     """
     For each event in catalog_df compute PGA at every exposure point.
     catalog_df columns: 'event_id','lon','lat','M','depth_km'
-    exposures_df must have columns identified by exposure_*_col
+    exposures_df have columns identified by exposure_*_col
     Returns concatenated DataFrame with columns:
       event_id, exposure_id, distance_km, M, pga_g
-    Note: This implementation is straightforward; for large data use chunking / KD-tree.
     """
     exp_ids = exposures_df[exposure_id_col].to_numpy()
     exp_lats = exposures_df[exposure_lat_col].to_numpy()
     exp_lons = exposures_df[exposure_lon_col].to_numpy()
 
     rows = []
-    for _, ev in catalog_df.iterrows():
+    for _, ev in catalog_df.iterrows(): # loop through each row (each earthquake)
         # horizontal epicentral distance (km)
-        R_epi = haversine_km(ev['lat'], ev['lon'], exp_lats, exp_lons)
+        R_epi = haversine_km(ev['lat'], ev['lon'], exp_lats, exp_lons) 
+        # calculates the great-circle distance (horizontal distance along the surface) from the event's epicenter to ALL exposure points simultaneously
         # hypocentral distance
-        R_hyp = np.sqrt(R_epi**2 + (ev['depth_km'])**2)
+        R_hyp = np.sqrt(R_epi**2 + (ev['depth_km'])**2) # the 3D distance from the source to the site
         pga = attenuation_fn(ev['M'], R_hyp)
         df_ev = pd.DataFrame({
             'event_id': int(ev['event_id']),
@@ -126,11 +135,12 @@ def compute_intensity_for_catalog(catalog_df: pd.DataFrame,
             'pga_g': pga
         })
         rows.append(df_ev)
+        # temporary DataFrame (df_ev), created for the results of this single event
     if not rows:
         return pd.DataFrame(columns=['event_id','exposure_id','distance_km','M','pga_g'])
-    out = pd.concat(rows, ignore_index=True)
+    out = pd.concat(rows, ignore_index=True) # stack the supframes together
     if drop_zeros:
-        out = out[out['pga_g'] > 1e-12].reset_index(drop=True)
+        out = out[out['pga_g'] > 1e-12].reset_index(drop=True) # filters the output to remove any rows where the calculated PGA is extremely small
     return out
 # It combines all the previous functions and concepts to calculate the ground shaking intensity (PGA) from an entire catalog of simulated earthquakes at every specific location of interest
 # -------------------------
@@ -144,8 +154,9 @@ def simulate_catalog_and_intensities(exposures_df: pd.DataFrame,
                                      depth_km=10.0,
                                      seed: Optional[int]=None,
                                      lambda_per_year: Optional[float]=None):
+    # lambda_per_year: possible future enhancement where the function might integrate a concept of time
     """
-    Convenience wrapper: generate catalog and compute intensities for given exposures.
+    Convenience wrapper: generate catalog and compute intensities for given exposures at once.
     Returns (catalog_df, intensities_df)
     """
     cat = generate_earthquake_events(n_events=n_events,
